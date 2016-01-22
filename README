@@ -1,0 +1,14 @@
+Yet Another ForkBomb
+
+
+A demonstration what happens when you are unable to kill it
+with your prefered utilities like `killall', `pkill' and so on.
+
+Tested on GNU/Linux.
+
+
+Installation
+-----------------
+
+$ gcc -Wall -std=gnu99 -o superbomb yafb.c
+$ ./superbomb
