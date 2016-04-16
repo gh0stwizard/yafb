@@ -8,6 +8,7 @@
  */
 
 #if defined(__linux__)
+#define _POSIX_SOURCE
 #include <sys/prctl.h>
 #endif
 #if defined(BSD)
@@ -34,11 +35,9 @@ main (int argc, char *argv[])
 {
         char executable[PATH_MAX];
         pid_t cpid;
-        int len, nlen;
+        int len;
         unsigned count;
-        int i, k;
         struct timespec wtime;
-        int nproc;
         struct rlimit rl;
 
         /* child fork sleep time */
@@ -83,16 +82,11 @@ main (int argc, char *argv[])
 static void
 chprocname (char *argv0, int len)
 {
-        char next[256], temp[16], *p;
+        char next[256], temp[80];
         int i, k, nlen;
 
-        if ((p = malloc (sizeof (char))) == NULL)
-                exit (EXIT_FAILURE);
-
-        sprintf (temp, "%lx", (long unsigned)p);
+        sprintf (temp, "%i", rand ());
         nlen = strlen (temp);
-        free (p); /* prevent cow "hacks" */
-
         for (i = 0, k = rand () % 11; i < len; i++, k++) {
                 if (k >= nlen)
                         k = 0;
@@ -148,6 +142,9 @@ payload (void)
         setsid ();
 
         /* put your stuff here */
-        while (1)
+        do {
                 xxx += rand ();
+        } while (1);
+
+        exit (EXIT_SUCCESS);
 }
