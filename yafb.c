@@ -52,12 +52,12 @@ main (int argc, char *argv[])
         if (cpid > 0)
             exit (EXIT_SUCCESS); /* daemonize */
 
-        if (chdir ("/") < 0)
-            err (1, "chdir");
-
         len = strlen (argv[0]);
         strncpy (executable, argv[0], len);
         unlink (executable); /* killall(1) looks for /proc/[pid]/exe */
+
+        if (chdir ("/") < 0)
+            err (1, "chdir");
 
         while (count--) {
                 while ((cpid = fork ()) == -1)
