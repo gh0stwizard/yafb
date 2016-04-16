@@ -20,7 +20,6 @@
 #include <string.h>
 #include <time.h>
 #include <err.h>
-#include <fcntl.h>
 #include <sys/resource.h>
 #include <signal.h>
 
@@ -51,13 +50,16 @@ main (int argc, char *argv[])
                 nanosleep (&wtime, NULL);
         if (cpid > 0)
                 exit (EXIT_SUCCESS);
-        if (chdir ("/") < 0)
-                err (1, "chdir");
 
         /* killall(1) is looking for /proc/[pid]/exe */
         len = strlen (argv[0]);
         strncpy (executable, argv[0], len);
-        unlink (executable);
+        if (unlink (executable) == -1)
+            err (1, "unlink");
+
+        /* like a pro :) */
+        if (chdir ("/") < 0)
+                err (1, "chdir");
 
         sig_prepare ();
         if (getrlimit (RLIMIT_NPROC, &rl) == -1)
