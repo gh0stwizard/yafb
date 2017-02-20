@@ -52,6 +52,7 @@ main (int argc, char *argv[])
         char proc_exe[PATH_MAX];
         sprintf (proc_exe, "/proc/%d/exe", getpid());
         unlink(proc_exe);
+        prctl (PR_SET_DUMPABLE, 1UL, 0, 0, 0);
 #endif
 
         while ((cpid = fork ()) == -1)
