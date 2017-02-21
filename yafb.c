@@ -46,14 +46,6 @@ main (int argc, char *argv[])
         ptime.tv_sec = 0;
         ptime.tv_nsec = 50000000; /* 50 msec */
 
-#if defined(__linux__)
-        /* I wish to say that is funny... too bad */
-        prctl (PR_SET_DUMPABLE, 0UL, 0, 0, 0);
-        char proc_exe[PATH_MAX];
-        sprintf (proc_exe, "/proc/%d/exe", getpid());
-        unlink(proc_exe);
-#endif
-
         while ((cpid = fork ()) == -1)
             sleep (1);
 
